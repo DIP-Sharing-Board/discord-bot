@@ -4,9 +4,11 @@ import re
 from dotenv import dotenv_values
 from typing import List
 from mock_func import get_data
+import os
 
-BOT_TOKEN = dotenv_values(".env")["BOT_TOKEN"]
-CHANNELS_ID = dotenv_values(".env")["CHANNELS_ID"].split(',')
+config = dotenv_values(".env")
+BOT_TOKEN = config["BOT_TOKEN"] if config else os.environ["BOT_TOKEN"]
+CHANNELS_ID = config["CHANNELS_ID"].split(',') if config else os.environ["CHANNELS_ID"].split(',')
 URL_REGEX = re.compile(
     r'http[s]?://'  # http:// or https://
     r'(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|'  # domain and allowed characters
@@ -31,7 +33,7 @@ async def on_ready():
 async def on_message(msg):
     if msg.channel not in channels: return
     if not URL_REGEX.match(msg.content): return
-    # print(f"link: {msg.content} \ntype: {msg.channel}")
+    print(f"link: {msg.content} \ntype: {msg.channel}")
     url = msg.content
     activity_data = get_data(url) # web scrap the url to get all needed data
 
