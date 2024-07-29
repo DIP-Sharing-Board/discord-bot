@@ -20,31 +20,47 @@ class ActivityScraper:
     def __init__(self):
         DetectorFactory.seed = 0  # Setting a seed for language detection to ensure consistent results
 
-    def get_deadline(self, url):
-        response = requests.get(url)  # Send a GET request to the provided URL
-        soup = BeautifulSoup(response.content, 'html.parser')  # Parse the HTML content using BeautifulSoup
-        date_pattern = r'(\d{1,2}\s+\w+\s+\d{4})'  # Regex pattern to match date formats
-        for h4 in soup.find_all('h4'):  # Iterate over all <h4> elements in the page
-            text = h4.get_text(strip=True)  # Get the text content of the <h4> element
-            match = re.search(date_pattern, text)  # Search for date pattern in the text
+    def get_deadline(self,url):
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        h4_elements = soup.find_all('h4', class_='wp-block-heading ticss-a768642d')
+        h4_texts = [h4.get_text(strip=True) for h4 in h4_elements]
+
+        all_h4_texts = ' | '.join(h4_texts)
+        print("All h4 texts:", all_h4_texts)
+
+        thai_months = {
+            'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+            'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+            'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+        }
+
+        segments = all_h4_texts.split('|')
+        if len(segments) >= 3:
+            third_segment = segments[2].strip()
+            print("Third segment:", third_segment)
+
+            date_pattern = r'(\d{1,2})\s*([^\d\s]+)\s*(\d{4})'
+            match = re.search(date_pattern, third_segment)
             if match:
-                date_text = match.group(0)  # Extract the matched date text
-                thai_months = {  # Mapping of Thai months to their corresponding numbers
-                    'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
-                    'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
-                    'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
-                }
-                day, month_thai, year = date_text.split()  # Split the date text into day, month, and year
-                month = thai_months.get(month_thai)  # Get the month number from the Thai month name
+                day, month_thai, year = match.groups()
+                print(f"Matched: day={day}, month={month_thai}, year={year}")
+                month = thai_months.get(month_thai)
                 if month:
-                    year = int(year) - 543  # Convert Thai year to Gregorian year
+                    year = int(year) - 543  # Convert Buddhist year to Gregorian year
                     try:
-                        deadline = datetime(year, month, int(day))  # Create a datetime object for the deadline
-                        return deadline  # Return the deadline
+                        deadline = datetime(year, month, int(day))
+                        print("Parsed deadline:", deadline)
+                        return deadline
                     except ValueError:
-                        print("Failed to create datetime object")  # Print error message if datetime creation fails
-        print("Deadline not found or could not be parsed")  # Print message if no deadline is found
-        return None  # Return None if no deadline is found
+                        print("Failed to create datetime object")
+        else:
+            print("Less than 3 segments found")
+
+        print("Deadline not found or could not be parsed")
+        return None
+
 
     class EventSpider(scrapy.Spider):
         name = 'event_spider'  # Name of the spider
