@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import scrapy
-from scrapy.crawler import CrawlerProcess
+from scrapy.crawler import CrawlerRunner
 from scrapy.signalmanager import dispatcher
 from pythainlp.util import normalize
 import json
@@ -13,6 +13,9 @@ import httpx
 import jmespath
 from langdetect import detect, DetectorFactory
 import dateparser
+from scrapy.utils.log import configure_logging
+from multiprocessing import Process, Queue
+from twisted.internet import reactor
 
 class ActivityScraper:
     INSTAGRAM_APP_ID = ""  # Instagram app ID for accessing the Instagram API
@@ -61,6 +64,32 @@ class ActivityScraper:
         print("Deadline not found or could not be parsed")
         return None
 
+    def crawl_spider(self, spider, q, start_urls):
+        try:
+            runner = CrawlerRunner({
+                'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
+            })
+            event_data = []
+            def crawler_results(item, response, spider):
+                event_data.append(item)
+            dispatcher.connect(crawler_results, signal=scrapy.signals.item_scraped)
+            deferred = runner.crawl(spider, start_urls=start_urls)
+            deferred.addBoth(lambda _: reactor.stop())
+            reactor.run()
+            q.put(event_data[0] if event_data else None)
+        except Exception as e:
+            q.put(e)
+
+    def run_spider(self, spider, start_urls):
+        q = Queue()
+        p = Process(target=self.crawl_spider, args=(spider, q, start_urls))
+        p.start()
+        result = q.get()
+        p.join()
+
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     class EventSpider(scrapy.Spider):
         name = 'event_spider'  # Name of the spider
@@ -225,28 +254,19 @@ class ActivityScraper:
 
     def scrape_event(self, url):
         if 'instagram.com' in url:
-            post_data = self.scrape_post(url)  # Scrape post data from Instagram
-            parsed_data = self.parse_post(post_data)  # Parse the scraped post data
+            post_data = self.scrape_post(url)
+            parsed_data = self.parse_post(post_data)
             if parsed_data:
-                analysis = self.analyze_caption(parsed_data.get("caption", ""))  # Analyze the caption for event details
+                analysis = self.analyze_caption(parsed_data.get("caption", ""))
                 return {
-                    "topic": analysis["event_name"],  # Extracted event name
-                    "imageUrl": None if parsed_data.get("is_video", False) else parsed_data.get("main_image_url", "None"),  # Extracted image URL
-                    "deadline": analysis["deadline"] or datetime.fromtimestamp(parsed_data.get("timestamp", 0)).isoformat()  # Extracted deadline
+                    "topic": analysis["event_name"],
+                    "imageUrl": None if parsed_data.get("is_video", False) else parsed_data.get("main_image_url", "None"),
+                    "deadline": analysis["deadline"] or datetime.fromtimestamp(parsed_data.get("timestamp", 0)).isoformat()
                 }
             else:
                 return None
         else:
-            process = CrawlerProcess({
-                'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-            })  # Create a Scrapy process with a custom user agent
-            event_data = []
-            def crawler_results(item, response, spider):
-                event_data.append(item)  # Append scraped items to the event_data list
-            dispatcher.connect(crawler_results, signal=scrapy.signals.item_scraped)  # Connect the item_scraped signal to the crawler_results function
-            process.crawl(self.EventSpider, start_urls=[url])  # Start crawling using the EventSpider
-            process.start()  # Block until the crawling is finished
-            return event_data[0] if event_data else None  # Return the first scraped item or None
+            return self.run_spider(self.EventSpider, [url])
 
     def run_scrape_event(self, url):
-        return self.scrape_event(url)  # Run the scrape_event method with the provided URL
+        return self.scrape_event(url)
