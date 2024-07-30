@@ -3,6 +3,11 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import dotenv_values
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 config = dotenv_values(".env")
 
@@ -66,7 +71,16 @@ class Other(Base):
         Index('idx_others_updated_at', 'updatedAt'),
     )
 
+# Create engine
 engine = create_engine(f"mysql+mysqlconnector://{DATABASE_USERNAME}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}")
-factory = sessionmaker(bind=engine)
-session = factory()
+logger.info("Database engine created successfully")
+
+# Create session factory
+SessionFactory = sessionmaker(bind=engine)
+
+# Create a session
+session = SessionFactory()
+
+# Create all tables
 Base.metadata.create_all(engine)
+logger.info("All tables created successfully")
