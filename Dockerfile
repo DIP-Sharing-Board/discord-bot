@@ -1,11 +1,5 @@
 # syntax=docker/dockerfile:1
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
-
 ARG PYTHON_VERSION=3.10.12
 FROM python:${PYTHON_VERSION}-slim as base
 
@@ -16,10 +10,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
 
+# Set pythainlp data path to a writable directory
+ENV PYTHAINLP_DATA_PATH=/app/data
+ENV PYTHAINLP_DATA_DIR=/app/data
+
 WORKDIR /app
 
 # Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
 RUN adduser \
     --disabled-password \
@@ -37,6 +34,9 @@ RUN adduser \
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements.txt,target=requirements.txt \
     python -m pip install -r requirements.txt
+
+# Create the writable directory for pythainlp data
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
 
 # Copy the source code into the container.
 COPY . .
