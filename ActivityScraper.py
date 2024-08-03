@@ -132,13 +132,17 @@ class ActivityScraper:
             domain = response.url.split('/')[2]  # Extract the domain from the URL
             if 'camphub.in.th' in domain:
                 soup = BeautifulSoup(response.text, 'html.parser')  # Parse the HTML content using BeautifulSoup
-                competition_image = soup.find('img', class_='wp-post-image')  # Find the main image element
-                if competition_image and 'data-src' in competition_image.attrs:
-                    return competition_image['data-src']  # Return the image URL
+                image_container = soup.find('p', style='margin-top:10px;')  # Find the <p> tag with the specified style
+                if image_container:
+                    image_tag = image_container.find('img')  # Find the image tag within the <p> tag
+                    if image_tag and 'data-src' in image_tag.attrs:
+                        image_url = image_tag['data-src']
+                        if "CAMPSTER-LOGO" not in image_url and "Camphub-4" not in image_url:
+                            return image_url  # Return the image URL from data-src if it doesn't contain "CAMPSTER-LOGO" or "Camphub-4"
             images = response.xpath("//img/@src").extract()  # Extract all image URLs from the page
             for image_url in images:
-                if "data:image" not in image_url:
-                    return image_url  # Return the first valid image URL
+                if "data:image" not in image_url and "CAMPSTER-LOGO" not in image_url and "Camphub-4" not in image_url:
+                    return image_url  # Return the first valid image URL that is not the CampHub logo and doesn't contain "Camphub-4"
             return None  # Return None if no valid image URL is found
 
     def analyze_caption(self, caption: str) -> Dict:
