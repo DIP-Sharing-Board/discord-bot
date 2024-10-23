@@ -24,5 +24,5 @@ jobs:
 
     - name: Build and push discord-bot image
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/discord-bot:latest -f Dockerfile .
-        docker push ${{ secrets.DOCKER_USERNAME }}/discord-bot:latest
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/dip-sharing-board-discord-bot:latest -f Dockerfile .
+        docker push ${{ secrets.DOCKER_USERNAME }}/dip-sharing-board-discord-bot:latest
