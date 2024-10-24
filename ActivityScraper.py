@@ -23,45 +23,55 @@ class ActivityScraper:
     def __init__(self):
         DetectorFactory.seed = 0  # Setting a seed for language detection to ensure consistent results
 
-    def get_deadline(self,url):
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-
-        h4_elements = soup.find_all('h4', class_='wp-block-heading ticss-a768642d')
-        h4_texts = [h4.get_text(strip=True) for h4 in h4_elements]
-
-        all_h4_texts = ' | '.join(h4_texts)
-        print("All h4 texts:", all_h4_texts)
-
-        thai_months = {
-            'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
-            'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
-            'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+    def get_deadline(self, url):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
         }
 
-        segments = all_h4_texts.split('|')
-        if len(segments) >= 3:
-            third_segment = segments[2].strip()
-            print("Third segment:", third_segment)
+        response = requests.get(url, headers=headers)
 
-            date_pattern = r'(\d{1,2})\s*([^\d\s]+)\s*(\d{4})'
-            match = re.search(date_pattern, third_segment)
-            if match:
-                day, month_thai, year = match.groups()
-                print(f"Matched: day={day}, month={month_thai}, year={year}")
-                month = thai_months.get(month_thai)
-                if month:
-                    year = int(year) - 543  # Convert Buddhist year to Gregorian year
-                    try:
-                        deadline = datetime(year, month, int(day))
-                        print("Parsed deadline:", deadline)
-                        return deadline
-                    except ValueError:
-                        print("Failed to create datetime object")
+        # Parse the HTML content using BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Try to locate the h6 element containing 'วันที่รับสมัครวันสุดท้าย'
+        deadline_h6 = soup.find('h6', string=re.compile('วันที่รับสมัครวันสุดท้าย'))
+
+        if deadline_h6:
+            # Find the next <h4> element which should contain the deadline
+            h4_element = deadline_h6.find_next('h4')
+            if h4_element:
+                h4_text = h4_element.get_text(strip=True)
+                print("Found deadline text:", h4_text)
+
+                # Dictionary for Thai month names
+                thai_months = {
+                    'มกราคม': 1, 'กุมภาพันธ์': 2, 'มีนาคม': 3, 'เมษายน': 4,
+                    'พฤษภาคม': 5, 'มิถุนายน': 6, 'กรกฎาคม': 7, 'สิงหาคม': 8,
+                    'กันยายน': 9, 'ตุลาคม': 10, 'พฤศจิกายน': 11, 'ธันวาคม': 12
+                }
+
+                # Regex pattern to match the day, month (in Thai), and year
+                date_pattern = r'(\d{1,2})\s*([^\d\s]+)\s*(\d{4})'
+                match = re.search(date_pattern, h4_text)
+                if match:
+                    day, month_thai, year = match.groups()
+                    print(f"Matched: day={day}, month={month_thai}, year={year}")
+                    month = thai_months.get(month_thai)
+                    if month:
+                        year = int(year) - 543  # Convert Buddhist year to Gregorian year
+                        try:
+                            deadline = datetime(year, month, int(day))
+                            print("Parsed deadline:", deadline)
+                            return deadline
+                        except ValueError as e:
+                            print(f"Failed to create datetime object: {e}")
+                else:
+                    print("Date pattern did not match")
+            else:
+                print("Deadline h4 element not found")
         else:
-            print("Less than 3 segments found")
+            print("Deadline h6 element not found")
 
-        print("Deadline not found or could not be parsed")
         return None
 
     def crawl_spider(self, spider, q, start_urls):
@@ -132,13 +142,17 @@ class ActivityScraper:
             domain = response.url.split('/')[2]  # Extract the domain from the URL
             if 'camphub.in.th' in domain:
                 soup = BeautifulSoup(response.text, 'html.parser')  # Parse the HTML content using BeautifulSoup
-                competition_image = soup.find('img', class_='wp-post-image')  # Find the main image element
-                if competition_image and 'data-src' in competition_image.attrs:
-                    return competition_image['data-src']  # Return the image URL
+                image_container = soup.find('p', style='margin-top:10px;')  # Find the <p> tag with the specified style
+                if image_container:
+                    image_tag = image_container.find('img')  # Find the image tag within the <p> tag
+                    if image_tag and 'data-src' in image_tag.attrs:
+                        image_url = image_tag['data-src']
+                        if "CAMPSTER-LOGO" not in image_url and "Camphub-4" not in image_url:
+                            return image_url  # Return the image URL from data-src if it doesn't contain "CAMPSTER-LOGO" or "Camphub-4"
             images = response.xpath("//img/@src").extract()  # Extract all image URLs from the page
             for image_url in images:
-                if "data:image" not in image_url:
-                    return image_url  # Return the first valid image URL
+                if "data:image" not in image_url and "CAMPSTER-LOGO" not in image_url and "Camphub-4" not in image_url:
+                    return image_url  # Return the first valid image URL that is not the CampHub logo and doesn't contain "Camphub-4"
             return None  # Return None if no valid image URL is found
 
     def analyze_caption(self, caption: str) -> Dict:
