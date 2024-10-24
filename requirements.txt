@@ -2,7 +2,7 @@ discord.py==2.4.0
 python-dotenv==1.0.1
 requests==2.32.2
 beautifulsoup4==4.12.2
-scrapy==2.11.0
+scrapy==2.11.2
 pythainlp==4.0.2
 jmespath==1.0.1
 httpx==0.25.2
