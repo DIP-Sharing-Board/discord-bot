@@ -11,5 +11,5 @@ dateparser==1.1.8
 urllib3==2.2.2
 SQLAlchemy==2.0.31
 sqlalchemy-orm==1.2.10
-mysql-connector-python==8.0.28
+mysql-connector-python==9.1.0
 Twisted==24.7.0
